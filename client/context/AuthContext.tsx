@@ -40,13 +40,57 @@ interface AuthContextType {
 
 // Import StationList model
 import { StationList } from '@/models/StationList';
+import {
+  getRecentStations,
+  addStationToRecents as utilAddStationToRecents,
+  MAX_RECENT_STATIONS
+} from '@/utils/recentStationsStorage';
+
+
+interface AuthContextType { // Ensure all new properties are in the Type
+  token: string | null;
+  userEmail: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, token: string) => Promise<void>;
+  logout: () => Promise<void>;
+  register: (email: string, token: string) => Promise<void>;
+
+  favoriteStations: Station[];
+  isLoadingFavorites: boolean;
+  fetchFavoriteStations: () => Promise<void>;
+  addFavoriteStation: (stationId: string) => Promise<void>;
+  removeFavoriteStation: (stationId: string) => Promise<void>;
+  isFavorite: (stationId: string) => boolean;
+
+  stationLists: StationList[];
+  isLoadingStationLists: boolean;
+  currentStationListDetail: StationList | null;
+  fetchStationLists: () => Promise<void>;
+  createStationList: (name: string) => Promise<StationList | null>;
+  updateStationList: (listId: string, name: string) => Promise<StationList | null>;
+  deleteStationList: (listId: string) => Promise<boolean>;
+  addStationToList: (listId: string, stationId: string) => Promise<StationList | null>;
+  removeStationFromList: (listId: string, stationId: string) => Promise<StationList | null>;
+  fetchStationListDetail: (listId: string) => Promise<void>; // Changed from Promise<StationList | null> for consistency
+
+  // Recently Played
+  recentlyPlayedStations: Station[];
+  isLoadingRecents: boolean;
+  notifyStationPlayed: (station: Station) => Promise<void>;
+  // No need to expose fetchRecentlyPlayedStations directly if it's auto-managed
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // For initial auth token loading
+  const [isLoading, setIsLoading] = useState(true);
+
+  // All stations cache (fetched once)
+  const [allStationsCache, setAllStationsCache] = useState<Station[]>([]);
+  const [isLoadingAllStationsCache, setIsLoadingAllStationsCache] = useState(true);
 
   // Favorites state
   const [favoriteStations, setFavoriteStations] = useState<Station[]>([]);
@@ -57,19 +101,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoadingStationLists, setIsLoadingStationLists] = useState(false);
   const [currentStationListDetail, setCurrentStationListDetail] = useState<StationList | null>(null);
 
+  // Recently Played State
+  const [recentlyPlayedStations, setRecentlyPlayedStations] = useState<Station[]>([]);
+  const [isLoadingRecents, setIsLoadingRecents] = useState(true);
+
 
   useEffect(() => {
+    const fetchAllStationsOnce = async () => {
+      setIsLoadingAllStationsCache(true);
+      try {
+        const response = await fetch(Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/stations' : 'http://localhost:3000/api/stations');
+        if (!response.ok) throw new Error('Failed to fetch all stations for context cache');
+        const data: Station[] = await response.json();
+        setAllStationsCache(data);
+      } catch (error) {
+        console.error("Failed to load all stations into context cache:", error);
+        // App can potentially still function for auth/lists without this global cache
+        // depending on how screens handle missing station details.
+      } finally {
+        setIsLoadingAllStationsCache(false);
+      }
+    };
+
+    fetchAllStationsOnce(); // Fetch all stations when provider mounts
+
     const loadAuthData = async () => {
       setIsLoading(true);
+      setIsLoadingRecents(true);
       try {
+        // Wait for allStationsCache to be loaded (or attempt to load it) before proceeding
+        // This ensures that recently played stations can be resolved to full objects.
+        // If allStationsCache is already loading via fetchAllStationsOnce, this might be redundant
+        // or could be chained. For simplicity, let's assume fetchAllStationsOnce has run or is running.
+        // A better way might be to ensure allStationsCache is populated before calling fetchRecentlyPlayedStationsInternal.
+
         const storedToken = await SecureStore.getItemAsync(TOKEN_KEY);
         const storedEmail = await SecureStore.getItemAsync(USER_EMAIL_KEY);
+
         if (storedToken) {
           setToken(storedToken);
           setUserEmail(storedEmail);
-          // After setting token, fetch initial favorites & lists
+
+          // Wait for all stations cache to be ready before fetching user data that depends on it
+          // This is a simplified way to handle dependency; a more robust solution might use Promise.all
+          // or chain these calls more explicitly if fetchAllStationsOnce was also async here.
+          const tempAllStations = isLoadingAllStationsCache ? (await getAllStationsForCache()) : allStationsCache;
+
           await fetchFavoriteStationsInternal(storedToken);
-          await fetchStationListsInternal(storedToken); // Fetch lists on load
+          await fetchStationListsInternal(storedToken);
+          await fetchRecentlyPlayedStationsInternal(storedToken, tempAllStations);
         }
       } catch (e) {
         console.error('Failed to load auth data:', e);
@@ -375,7 +455,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         userEmail,
         isAuthenticated: !!token,
-        isLoading,
+        isLoading: isLoading || isLoadingAllStationsCache, // Combine initial loading states
         login,
         logout,
         register,
@@ -396,6 +476,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addStationToList,
         removeStationFromList,
         fetchStationListDetail,
+        // Recently Played
+        recentlyPlayedStations,
+        isLoadingRecents,
+        notifyStationPlayed, // Expose this new function
       }}
     >
       {children}
@@ -403,8 +487,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
+// Need to add notifyStationPlayed and fetchRecentlyPlayedStationsInternal to AuthContextType
+// and implement them.
+
+// At the top of the file, in AuthContextType interface:
+// ...
+// fetchStationListDetail: (listId: string) => Promise<void>;
+// recentlyPlayedStations: Station[];
+// isLoadingRecents: boolean;
+// notifyStationPlayed: (station: Station) => Promise<void>;
+// ...
+
+  // Helper to ensure allStationsCache is populated, used during initial load.
+  const getAllStationsForCache = async (): Promise<Station[]> => {
+    if (allStationsCache.length > 0) return allStationsCache;
+    try {
+      const response = await fetch(Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/stations' : 'http://localhost:3000/api/stations');
+      if (!response.ok) throw new Error('Failed to fetch all stations for context cache on demand');
+      const data: Station[] = await response.json();
+      setAllStationsCache(data); // Update cache
+      return data;
+    } catch (error) {
+      console.error("Failed to load all stations into context cache (on demand):", error);
+      return []; // Return empty if fails, recents might be only IDs then or fail to resolve
+    }
+  };
+
+  const fetchRecentlyPlayedStationsInternal = async (currentToken: string | null, stationsLookup: Station[]) => {
+    if (!currentToken) {
+      setRecentlyPlayedStations([]);
+      setIsLoadingRecents(false);
+      return;
+    }
+    setIsLoadingRecents(true);
+    try {
+      const recentIds = await getRecentStations();
+      const resolvedStations = recentIds
+        .map(id => stationsLookup.find(s => s.id === id)) // Use provided lookup
+        .filter(s => s !== undefined) as Station[];
+      setRecentlyPlayedStations(resolvedStations);
+    } catch (error) {
+      console.error('Fetch recently played stations error:', error);
+      setRecentlyPlayedStations([]); // Clear on error
+    } finally {
+      setIsLoadingRecents(false);
+    }
+  };
+
+  const notifyStationPlayed = async (station: Station) => {
+    if (!station || !token) return; // Need token to ensure user is logged in conceptually
+    await utilAddStationToRecents(station.id); // Update AsyncStorage
+
+    // Update in-memory state for immediate UI feedback
+    setRecentlyPlayedStations(prevRecents => {
+      const otherRecents = prevRecents.filter(s => s.id !== station.id);
+      return [station, ...otherRecents].slice(0, MAX_RECENT_STATIONS);
+    });
+    // No need to call fetchRecentlyPlayedStationsInternal here as we're manually updating the state
+  };
+
 // Make sure Alert is imported if not already
-import { Alert } from 'react-native';
+  import { Alert, Platform } from 'react-native'; // Added Platform
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

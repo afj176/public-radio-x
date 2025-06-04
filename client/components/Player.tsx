@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated } from 'react-native'; // Added Animated
 import { Audio, AVPlaybackStatus } from 'expo-av';
+import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext'; // For themed styling
 
 interface Station {
   id: string;
@@ -14,10 +16,13 @@ interface PlayerProps {
 }
 
 const Player: React.FC<PlayerProps> = ({ station }) => {
+  const { notifyStationPlayed } = useAuth();
+  const { colors } = useTheme(); // Get themed colors
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const playerAnim = useRef(new Animated.Value(0)).current; // For opacity and translateY
 
   useEffect(() => {
     return sound
@@ -30,16 +35,27 @@ const Player: React.FC<PlayerProps> = ({ station }) => {
 
   useEffect(() => {
     if (station) {
+      Animated.timing(playerAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
       playStream(station);
     } else {
-      // If station becomes null (e.g. deselected), stop and unload sound
-      if (sound) {
-        sound.stopAsync().then(() => sound.unloadAsync());
-        setSound(null);
-        setIsPlaying(false);
-      }
+      Animated.timing(playerAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        // After animation out, unload sound if it exists
+        if (sound) {
+          sound.stopAsync().then(() => sound.unloadAsync());
+          setSound(null);
+          setIsPlaying(false);
+        }
+      });
     }
-  }, [station]);
+  }, [station, playerAnim]); // playerAnim added to dependencies
 
   const playStream = async (currentStation: Station) => {
     if (sound) {
@@ -52,12 +68,18 @@ const Player: React.FC<PlayerProps> = ({ station }) => {
     setError(null);
     console.log(`Loading Sound for: ${currentStation.name}`);
     try {
-      const { sound: newSound } = await Audio.Sound.createAsync(
+      const { sound: newSound, status } = await Audio.Sound.createAsync(
         { uri: currentStation.streamUrl },
         { shouldPlay: true } // Start playing immediately
       );
+
+      if ((status as AVPlaybackStatus).isLoaded && (status as AVPlaybackStatus).isPlaying) {
+        // await addStationToRecents(currentStation.id); // Old way
+        await notifyStationPlayed(currentStation); // New way: notify context
+      }
+
       setSound(newSound);
-      setIsPlaying(true);
+      setIsPlaying(true); // isPlaying might already be true from status
       newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
     } catch (e: any) {
       console.error('Error loading or playing sound:', e);
@@ -99,48 +121,75 @@ const Player: React.FC<PlayerProps> = ({ station }) => {
     setIsPlaying(!isPlaying);
   };
 
-  if (!station) {
-    return null; // Don't render player if no station is selected
-  }
+  // No direct rendering if !station, animation handles visibility
+  // if (!station) {
+  //   return null;
+  // }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.stationName}>{station.name}</Text>
-      {isLoading && <Text>Loading stream...</Text>}
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      <TouchableOpacity style={styles.button} onPress={handlePlayPause} disabled={isLoading}>
-        <Text style={styles.buttonText}>{isPlaying ? 'Pause' : 'Play'}</Text>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.cardBackground, // Themed background
+          borderColor: colors.border, // Themed border
+          opacity: playerAnim, // Fade effect
+          transform: [ // Slide effect
+            {
+              translateY: playerAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [50, 0], // Slide up from bottom
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <Text style={[styles.stationName, { color: colors.text }]}>{station?.name || 'No station'}</Text>
+      {isLoading && <Text style={{color: colors.subtleText}}>Loading stream...</Text>}
+      {error && <Text style={[styles.errorText, {color: colors.error}]}>{error}</Text>}
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: colors.primary }]}
+        onPress={handlePlayPause}
+        disabled={isLoading || !station} // Disable if no station too
+      >
+        <Text style={[styles.buttonText, { color: colors.cardBackground }]}>{isPlaying ? 'Pause' : 'Play'}</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    padding: 10,
-    backgroundColor: '#f0f0f0',
+    padding: 16, // theme.spacing.md
     borderTopWidth: 1,
-    borderColor: '#ccc',
     alignItems: 'center',
+    // Shadow can be added here if desired, e.g. theme.shadows.modal but applied upwards
+    // For now, relying on TabOneScreen's background to contrast
+    position: 'absolute', // If it's an overlay player at the bottom
+    bottom: 0,
+    left: 0,
+    right: 0,
+    // elevation: 10, // if it's an overlay
   },
   stationName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
+    fontSize: 18, // theme.typography.fontSizes.lg
+    fontWeight: '600', // theme.typography.fontWeights.semiBold
+    marginBottom: 8, // theme.spacing.sm
   },
   button: {
-    backgroundColor: '#007bff',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    marginTop: 10,
+    paddingVertical: 10, // theme.spacing.sm + xs
+    paddingHorizontal: 20, // theme.spacing.lg
+    borderRadius: 20, // theme.borderRadius.round
+    marginTop: 10, // theme.spacing.sm
+    minWidth: 100,
+    alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 16, // theme.typography.fontSizes.md
+    fontWeight: '500', // theme.typography.fontWeights.medium
   },
   errorText: {
-    color: 'red',
     marginTop: 5,
   },
 });

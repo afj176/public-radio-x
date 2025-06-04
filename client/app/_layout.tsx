@@ -3,12 +3,13 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect } from 'react'; // Added React
+import React, { useEffect } from 'react';
 import 'react-native-reanimated';
-import { ActivityIndicator, View } from 'react-native'; // Added ActivityIndicator, View
-
-import { useColorScheme } from '@/components/useColorScheme';
-import { AuthProvider, useAuth } from '@/context/AuthContext'; // Import AuthProvider and useAuth
+import { ActivityIndicator, View, StatusBar } from 'react-native'; // Added StatusBar
+// useColorScheme from react-native is for system theme, we'll use our context
+// import { useColorScheme } from '@/components/useColorScheme';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { CustomThemeProvider, useTheme } from '@/context/ThemeContext'; // Import ThemeProvider and useTheme
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -46,84 +47,92 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <CustomThemeProvider>
+        <RootLayoutNav />
+      </CustomThemeProvider>
     </AuthProvider>
   );
 }
 
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-  const { isAuthenticated, isLoading } = useAuth();
+// Renamed to avoid confusion with system's colorScheme if that was intended by original useColorScheme hook
+function RootLayoutNavInternal() {
+  // const systemProvidedColorScheme = useColorScheme(); // Original hook, if needed for comparison or initial
+  const { colors, themeMode } = useTheme(); // Use our theme context
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    if (isLoading) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
+    if (isAuthLoading) return; // Wait for auth state
 
     // Check if the current route is part of the (app) group.
     // Expo Router v3 uses a different segment structure for group routes.
     // For instance, /(app)/tabs/index would be ['', '(app)', 'tabs', 'index']
     // or for /(auth)/login it would be ['', '(auth)', 'login']
     // A simple check for the group name in segments should be okay.
-    const currentRouteGroup = segments.length > 1 ? segments[1] : null;
-
+    // For Expo Router, segments[0] is often the group name like '(auth)' or '(tabs)'
+    const currentRouteGroup = segments[0];
 
     if (isAuthenticated) {
-      if (currentRouteGroup === 'auth') { // If in auth group, redirect to app
-        router.replace('/(tabs)'); // Corrected: redirect to (tabs) directly
+      if (currentRouteGroup === '(auth)') { // If in auth group, redirect to app
+        router.replace('/(tabs)');
       }
     } else {
-      // If not authenticated, and not already in auth flow, redirect to login
-      // segments[0] is the directory, segments[1] can be the screen in that directory
-      // e.g. for /login, segments might be ['(auth)', 'login']
-      // If we are anywhere NOT in (auth) group, redirect to login.
-      if (segments[0] !== '(auth)') {
+      // If not authenticated, and not already in auth flow, redirect to login.
+      if (currentRouteGroup !== '(auth)') {
          router.replace('/(auth)/login');
       }
     }
-  }, [isAuthenticated, isLoading, segments, router]);
+  }, [isAuthenticated, isAuthLoading, segments, router]);
 
-  if (isLoading) {
+  // This ThemeProvider from @react-navigation/native is for navigation elements (headers, etc.)
+  // It's different from our CustomThemeProvider which provides colors for our components.
+  // We can make its theme dynamic based on our themeMode.
+  const navigationTheme = useMemo(() => {
+    const baseNavTheme = themeMode === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...baseNavTheme,
+      colors: {
+        ...baseNavTheme.colors,
+        background: colors.background, // Use our app's background
+        card: colors.cardBackground,   // Use our app's card background for headers
+        text: colors.text,             // Use our app's text color for header text
+        primary: colors.primary,       // Use our app's primary color for tint
+        border: colors.border,         // Use our app's border color
+      },
+    };
+  }, [themeMode, colors]);
+
+  if (isAuthLoading) { // Only wait for auth loading here. Theme loading is handled by CustomThemeProvider.
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? DarkTheme.colors.background : DefaultTheme.colors.background }}>
-        <ActivityIndicator size="large" color={colorScheme === 'dark' ? DarkTheme.colors.text : DefaultTheme.colors.text} />
+      // Use a View with background from our theme for the loading screen
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
-  // Based on Expo Router's file system routing,
-  // it will automatically render the correct stack ((app) or (auth))
-  // The Stack below just needs to declare the available groups (or top-level screens).
-  // The headerShown: false is to avoid double headers if groups manage their own.
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navigationTheme}>
+      <StatusBar barStyle={themeMode === 'dark' ? 'light-content' : 'dark-content'} />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Define groups. Expo Router will pick the right one based on URL. */}
-        {/* The (app) group is not currently used for main content if (tabs) is separate */}
-        {/* <Stack.Screen name="(app)" /> */}
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         <Stack.Screen
           name="listDetail/[listId]"
           options={{
-            headerShown: true, // Show header for this screen
-            title: 'List Details', // Default title, can be overridden by screen component
+            headerShown: true,
+            // title: 'List Details', // Title can be set by the screen itself
+            // Header styling will be affected by the navigationTheme
           }}
         />
-        {/*
-          The modal screen definition `name="modal"` is kept at root for now,
-          as moving it also failed.
-          If `modal.tsx` was moved to `client/app/(app)/modal.tsx`,
-          Expo Router should pick it up from there when navigated to.
-          The (app) group's layout (`client/app/(app)/_layout.tsx` if you create one)
-          would then be responsible for defining how `modal` is presented if needed.
-          Or, if it's a global modal, its definition might need to be adjusted.
-          For now, let's assume modals are handled within their respective groups.
-        */}
       </Stack>
     </ThemeProvider>
   );
+}
+
+// Wrap RootLayoutNavInternal with the CustomThemeProvider to access useTheme()
+function RootLayoutNav() {
+  return <RootLayoutNavInternal />;
 }
