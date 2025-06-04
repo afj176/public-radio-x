@@ -1,0 +1,12 @@
+# Ignore artifacts:
+build
+coverage
+dist
+node_modules
+
+# Ignore files manually created by expo:
+client/expo-env.d.ts
+
+# Ignore lock files
+package-lock.json
+yarn.lock
