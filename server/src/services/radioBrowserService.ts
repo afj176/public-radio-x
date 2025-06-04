@@ -67,19 +67,19 @@ export const getStations = async (
       }
       console.log(`Cache miss for key: ${cacheKey}`);
     } else {
-        console.warn(`Redis not ready (status: ${redisClient.status}), skipping cache for key: ${cacheKey}`);
+        console.warn(`Redis not ready (status: ${redisClient.status}), skipping cache GET for key: ${cacheKey}`);
     }
   } catch (redisError) {
     console.error(`Redis GET error for key ${cacheKey}:`, redisError);
     // Fall through to API fetch if Redis GET fails
   }
 
+  let apiUrl = `${BASE_URL}/stations/search?limit=${limit}&hidebroken=true&order=clickcount&reverse=true`;
+  if (name) apiUrl += `&name=${encodeURIComponent(name)}`;
+  if (tag) apiUrl += `&tag=${encodeURIComponent(tag)}`;
+
   // If not in cache or Redis error, fetch from API
   try {
-    let apiUrl = `${BASE_URL}/stations/search?limit=${limit}&hidebroken=true&order=clickcount&reverse=true`;
-    if (name) apiUrl += `&name=${encodeURIComponent(name)}`;
-    if (tag) apiUrl += `&tag=${encodeURIComponent(tag)}`;
-
     const response = await axios.get<Station[]>(apiUrl);
     const stationsData = response.data;
 
@@ -98,12 +98,14 @@ export const getStations = async (
 
     return stationsData;
   } catch (error) {
+    const logParams = `limit=${limit}, name=${name}, tag=${tag}`;
     if (axios.isAxiosError(error)) {
-      console.error('Error fetching stations from Radio-Browser API:', error.message);
-      // Potentially handle specific error codes, like error.response?.status
+      console.error(`Axios error fetching stations from Radio-Browser API (URL: ${apiUrl}, Params: ${logParams}):`, error.message, error.response?.status, error.response?.data);
     } else {
-      console.error('An unexpected error occurred:', error);
+      console.error(`Unexpected error fetching stations from Radio-Browser API (URL: ${apiUrl}, Params: ${logParams}):`, error);
     }
-    return []; // Return an empty array or throw a custom error
+    // If execution reaches here, it's an error with the API call itself.
+    // Throw an error to be caught by the route handler.
+    throw new Error('Failed to fetch stations from Radio-Browser API.');
   }
 };
