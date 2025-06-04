@@ -120,7 +120,7 @@ describe('Player', () => {
     fireEvent.press(getByText('Play'));
     await waitFor(() => expect(mockSoundObject.playAsync).toHaveBeenCalled());
     act(() => {
-        const statusUpdateCallback = mockSoundОbject.setOnPlaybackStatusUpdate.mock.calls[0][0];
+        const statusUpdateCallback = mockSoundObject.setOnPlaybackStatusUpdate.mock.calls[0][0];
         statusUpdateCallback({ isLoaded: true, isPlaying: true } as AVPlaybackStatus);
     });
     expect(getByText('Pause')).toBeTruthy();
