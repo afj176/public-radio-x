@@ -120,12 +120,11 @@ describe('MyListsScreen', () => {
     mockStationListsData.push({ id: '1', name: 'To Delete', stationIds: [] });
     mockAuthContextValue.stationLists = mockStationListsData;
 
-    const { getByText, UNSAFE_getByProps } = render(<MyListsScreen />);
+    const { getByText, getByTestId } = render(<MyListsScreen />);
     await waitFor(() => expect(mockFetchStationLists).toHaveBeenCalledTimes(1));
 
-    // Find trash icon for "To Delete" list. This is fragile.
-    // A testID on the TouchableOpacity would be better.
-    const deleteButton = UNSAFE_getByProps({ name: "trash" });
+    // Find trash icon for "To Delete" list using testID.
+    const deleteButton = getByTestId("delete-button-ToDelete");
     fireEvent.press(deleteButton);
 
     expect(Alert.alert).toHaveBeenCalledWith(
