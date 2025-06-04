@@ -6,11 +6,24 @@ Welcome to the Public Radio Streaming Application! This project allows users to 
 This project is a public radio streaming application designed to provide users with easy access to a wide array of live radio broadcasts. Whether you're looking for news, music, or talk shows, this application aims to be your go-to platform for public radio entertainment.
 
 ## 🌟 Features
-- Stream radio stations live
-- Browse and search for available stations
-- User authentication and profile management (planned)
-- Admin panel for station management (planned)
-- Favorites list for quick access to preferred stations (planned)
+
+### ✅ Core Features
+- User Authentication (Login/Register)
+- Browse and Stream Radio Stations (with search and genre filtering)
+- Manage Favorite Stations
+- Create and Manage Custom Station Lists
+- View Recently Played Stations
+- Dark/Light Theme Toggle
+
+### 🚀 Planned Features
+(A more detailed roadmap for these planned features will be available soon.)
+- Sleep Timer
+- Alarm Clock Functionality
+- Offline Downloads (for podcasts or specific shows if applicable)
+- Enhanced Song/Artist Information Display (currently basic)
+- User Profile Management (e.g., change password, view detailed listening history)
+- Social Sharing of Stations/Shows
+- Admin panel for station management (for administrators)
 
 ## 💻 Technologies Used
 **Client (📱):**
@@ -24,8 +37,9 @@ This project is a public radio streaming application designed to provide users w
 
 ## 🚀 Getting Started
 **Prerequisites:**
-- Node.js and npm installed
-- Expo CLI installed (`npm install -g expo-cli`)
+- Node.js: ^18.0.0 (LTS recommended)
+- npm (comes with Node.js)
+- Expo CLI: `npm install -g expo-cli`
 - Git
 
 **Setup and Run:**
