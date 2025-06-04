@@ -72,26 +72,14 @@ This project is a public radio streaming application designed to provide users w
    - An Android or iOS simulator/emulator.
    - Your physical Android or iOS device using the Expo Go app.
 
-## 📂 Folder Structure
-```
-.
-├── client/                 # React Native (using Expo) client application
-│   ├── assets/             # Static assets (images, fonts, etc.)
-│   ├── components/         # Reusable UI components
-│   ├── navigation/         # Navigation setup (e.g., React Navigation)
-│   ├── screens/            # Application screens (views)
-│   ├── services/           # API service integrations
-│   ├── App.js              # Main application component
-│   └── ...                 # Other client-specific files and folders
-├── server/                 # Node.js (Express) server application
-│   ├── config/             # Configuration files (database, environment variables)
-│   ├── controllers/        # Request handlers for different routes
-│   ├── middleware/         # Custom middleware functions
-│   ├── models/             # Database schemas/models
-│   ├── routes/             # API route definitions
-│   ├── services/           # Business logic services
-│   ├── app.js              # Express application setup
-│   └── server.js           # Server entry point
-├── .gitignore              # Specifies intentionally untracked files that Git should ignore
-└── README.md               # This file
-```
+## 📻 Featured Radio Stations
+Here are a few sample stations to get you started:
+
+| Name                  | Genre        | Stream URL                             |
+|-----------------------|--------------|----------------------------------------|
+| Classic Rock Hits     | Rock         | http://stream.example.com/classic-rock |
+| Jazz Vibes            | Jazz         | http://stream.example.com/jazz-vibes   |
+| News Talk Central     | News/Talk    | http://stream.example.com/news-talk    |
+| Electronic Beats      | Electronic   | http://stream.example.com/electronic   |
+
+*Note: This is a sample list. More stations can be found within the application!*

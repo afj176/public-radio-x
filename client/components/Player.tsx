@@ -3,13 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated } from 'react
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext'; // For themed styling
-
-interface Station {
-  id: string;
-  name: string;
-  streamUrl: string;
-  genre: string;
-}
+import { Station } from '@/models/Station'; // Import the updated model
 
 interface PlayerProps {
   station: Station | null;
@@ -68,13 +62,17 @@ const Player: React.FC<PlayerProps> = ({ station }) => {
     setError(null);
     console.log(`Loading Sound for: ${currentStation.name}`);
     try {
+      const streamUrl = currentStation.url_resolved || currentStation.url;
+      if (!streamUrl) {
+        throw new Error('Station has no valid stream URL.');
+      }
       const { sound: newSound, status } = await Audio.Sound.createAsync(
-        { uri: currentStation.streamUrl },
+        { uri: streamUrl },
         { shouldPlay: true } // Start playing immediately
       );
 
       if ((status as AVPlaybackStatus).isLoaded && (status as AVPlaybackStatus).isPlaying) {
-        // await addStationToRecents(currentStation.id); // Old way
+        // await addStationToRecents(currentStation.stationuuid); // Old way with potential new ID
         await notifyStationPlayed(currentStation); // New way: notify context
       }
 
