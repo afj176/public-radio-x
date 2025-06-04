@@ -29,7 +29,7 @@ logs
 !.env.example
 
 # Docker
-Dockerfile
+# Dockerfile should NOT be ignored in the .dockerignore for the directory it resides in.
 .dockerignore
 
 # OS generated files

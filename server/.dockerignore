@@ -22,7 +22,8 @@ yarn-error.log*
 !.env.example # If you have an example env file you want to include
 
 # Docker
-Dockerfile # Don't include the Dockerfile itself in the context if it's in a parent dir
+# Dockerfile should NOT be ignored in the .dockerignore for the directory it resides in.
+# The Docker CLI automatically looks for 'Dockerfile' in the build context path.
 .dockerignore # Don't include the .dockerignore file itself
 
 # OS generated files

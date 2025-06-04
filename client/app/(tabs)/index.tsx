@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Platform, Button as RNButton, TextInput, ScrollView, Switch, Image } from 'react-native';
 // Import View and Text from react-native directly to avoid issues with Themed components for now
 // import { Text, View } from '@/components/Themed';
