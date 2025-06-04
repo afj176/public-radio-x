@@ -3,9 +3,9 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react'; // Added useMemo
 import 'react-native-reanimated';
-import { ActivityIndicator, View, StatusBar } from 'react-native'; // Added StatusBar
+import { ActivityIndicator, View, StatusBar } from 'react-native';
 // useColorScheme from react-native is for system theme, we'll use our context
 // import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';

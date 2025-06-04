@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, Button } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, Button, Platform } from 'react-native'; // Added Platform
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { Station } from '@/models/Station'; // Assuming this path is correct
