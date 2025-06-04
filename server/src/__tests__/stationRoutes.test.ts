@@ -1,84 +1,96 @@
 import { Request, Response } from 'express';
-// This is a bit tricky because stationRoutes.ts exports a Router.
-// To unit test the handler, we'd ideally export the handler function itself.
-// Let's assume we refactor stationRoutes.ts to export its handlers for easier testing,
-// or we test the router by manually calling its route handlers.
-
-// For this example, let's assume stationRoutes.ts is structured like:
-// export const getAllStationsHandler = (req, res) => { res.json(stations) };
-// router.get('/', getAllStationsHandler);
-// If not, this test needs adjustment.
-
-// Let's try to get the handler from the router stack. This is more complex.
-// A simpler approach for unit testing is to export handlers directly.
-// Given the current structure of typical Express router files, truly unit testing
-// handlers without 'supertest' or refactoring can be less straightforward.
-
-// Alternative: Mock the model and test the router's behavior for a specific route.
-// This still doesn't directly call the handler function in isolation easily without refactoring.
-
-// Let's assume a simplified scenario where we can access the handler function.
-// If stationRoutes.ts was:
-//   import { stations } from '../models/stationModel';
-//   export const _getAllStationsHandler = (req, res) => res.json(stations);
-//   router.get('/', _getAllStationsHandler);
-// Then we could do:
-
-import { stations as mockStationsData } from '../models/stationModel'; // Actual model
-import stationRoutes from '../routes/stationRoutes'; // The router
+import { getStationsHandler, getStationByIdHandler, getLiveStationsHandler } from '../routes/stationRoutes';
+import { stations as mockStationsData } from '../models/stationModel';
+import * as radioBrowserService from '../services/radioBrowserService';
 
 // Mock the stationModel
 jest.mock('../models/stationModel', () => ({
-  __esModule: true, // This is important for ES modules
+  __esModule: true,
   stations: [
     { id: '1', name: 'Mock Station 1', streamUrl: 'url1', genre: 'Rock' },
     { id: '2', name: 'Mock Station 2', streamUrl: 'url2', genre: 'Pop' },
   ],
 }));
 
-describe('Station Routes', () => {
-  describe('GET /api/stations handler (conceptual)', () => {
+// Mock the radioBrowserService
+jest.mock('../services/radioBrowserService');
+
+describe('Station Route Handlers', () => {
+  let mockReq: Partial<Request>;
+  let mockRes: Partial<Response>;
+  let mockNext: jest.Mock;
+
+  beforeEach(() => {
+    mockReq = {};
+    mockRes = {
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+    };
+    mockNext = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('getStationsHandler', () => {
     it('should return all stations from the mock model', () => {
-      const mockReq = {} as Request; // Minimal mock for this handler
-      const mockRes = {
-        json: jest.fn(), // Mock the .json method
-        status: jest.fn().mockReturnThis(), // Mock .status if used
-      } as unknown as Response;
+      getStationsHandler(mockReq as Request, mockRes as Response);
+      expect(mockRes.json).toHaveBeenCalledWith(mockStationsData);
+    });
+  });
 
-      // How to get the specific handler for GET '/' from stationRoutes (which is an express.Router)?
-      // This is where it gets tricky for pure unit tests without refactoring router setup.
-      // Express routers store their routes in a stack. We can inspect this stack.
-      const getRouteHandler = stationRoutes.stack.find(
-        (layer) => layer.route && layer.route.path === '/' && layer.route.methods.get
-      );
+  describe('getStationByIdHandler', () => {
+    it('should return a station if found', () => {
+      mockReq.params = { id: '1' };
+      getStationByIdHandler(mockReq as Request, mockRes as Response);
+      expect(mockRes.json).toHaveBeenCalledWith(mockStationsData.find(s => s.id === '1'));
+    });
 
-      if (getRouteHandler && getRouteHandler.route && getRouteHandler.route.stack.length > 0) {
-        // The actual handler function is often the last in the stack for that route (or only one)
-        const handler = getRouteHandler.route.stack[getRouteHandler.route.stack.length -1].handle;
+    it('should return 404 if station not found', () => {
+      mockReq.params = { id: '3' };
+      getStationByIdHandler(mockReq as Request, mockRes as Response);
+      expect(mockRes.status).toHaveBeenCalledWith(404);
+      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Station not found' });
+    });
+  });
 
-        // Now call the isolated handler
-        handler(mockReq, mockRes, jest.fn()); // jest.fn() for next
+  describe('getLiveStationsHandler', () => {
+    const mockLiveStations = [{ name: 'Live Station 1' }, { name: 'Live Station 2' }];
 
-        expect(mockRes.json).toHaveBeenCalledTimes(1);
-        // Access the arguments of the first call to mockRes.json
-        const responseJsonArg = (mockRes.json as jest.Mock).mock.calls[0][0];
-        expect(responseJsonArg).toHaveLength(2);
-        expect(responseJsonArg[0].name).toBe('Mock Station 1');
-        expect(responseJsonArg[1].name).toBe('Mock Station 2');
-      } else {
-        // This will fail if the route isn't found, indicating a setup issue or change in Express internals.
-        throw new Error("GET / handler not found on stationRoutes for testing.");
-      }
+    beforeEach(() => {
+      (radioBrowserService.getStations as jest.Mock).mockResolvedValue(mockLiveStations);
+    });
+
+    it('should return live stations with default limit', async () => {
+      mockReq.query = {};
+      await getLiveStationsHandler(mockReq as Request, mockRes as Response);
+      expect(radioBrowserService.getStations).toHaveBeenCalledWith(100, undefined, undefined);
+      expect(mockRes.json).toHaveBeenCalledWith(mockLiveStations);
+    });
+
+    it('should return live stations with specified limit, name, and tag', async () => {
+      mockReq.query = { limit: '50', name: 'Test Name', tag: 'Test Tag' };
+      await getLiveStationsHandler(mockReq as Request, mockRes as Response);
+      expect(radioBrowserService.getStations).toHaveBeenCalledWith(50, 'Test Name', 'Test Tag');
+      expect(mockRes.json).toHaveBeenCalledWith(mockLiveStations);
+    });
+
+    it('should handle errors from radioBrowserService', async () => {
+      const errorMessage = 'Service Error';
+      (radioBrowserService.getStations as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      mockReq.query = {};
+      await getLiveStationsHandler(mockReq as Request, mockRes as Response);
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Error fetching live stations', error: errorMessage });
+    });
+
+    it('should handle unknown errors when fetching live stations', async () => {
+        (radioBrowserService.getStations as jest.Mock).mockRejectedValue('Some random error');
+        mockReq.query = {};
+        await getLiveStationsHandler(mockReq as Request, mockRes as Response);
+        expect(mockRes.status).toHaveBeenCalledWith(500);
+        expect(mockRes.json).toHaveBeenCalledWith({ message: 'Error fetching live stations', error: 'An unknown error occurred' });
     });
   });
 });
-
-// Note: This approach of digging into router.stack is fragile and depends on Express internals.
-// A more robust way for unit testing handlers is to export them from your route files
-// and test them directly, e.g.:
-// export const getAllStations = (req, res) => { res.json(stations); }
-// router.get('/', getAllStations);
-// Then in test: import { getAllStations } from './stationRoutes'; // and test getAllStations
-//
-// For full integration tests of routes (simulating HTTP calls), 'supertest' is recommended.
-// This example focuses on attempting a unit test of the handler logic itself.
