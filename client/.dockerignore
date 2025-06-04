@@ -1,0 +1,52 @@
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# package-lock.json should NOT be ignored if using npm ci or for reproducible builds
+
+# Expo specific
+.expo/
+.expo-shared/
+npm-shrinkwrap.json # If not using, or if generated locally
+# *.jks # Android keystore files
+# *.p12 # iOS certificate files
+# *.mobileprovision # iOS provisioning profiles
+# .idea/ # JetBrains IDE specific
+# web-build/ # Expo web build output, will be generated in Docker
+# dist/ # General build output folder, often used by Expo too
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker
+# Dockerfile should NOT be ignored in the .dockerignore for the directory it resides in.
+.dockerignore
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files (if not covered by .gitignore already)
+.vscode/
+# *.sublime-project
+# *.sublime-workspace
+
+# Temporary files from local development
+app.config.js.orig
+app.json.orig
+# Add any other platform-specific build artifacts if generated locally
+# e.g., android/, ios/ if you run prebuild locally and don't want them in web-only image
+# For a web-only build, it's often good to ignore native directories if they exist
+# but were not intended for this specific Docker image.
+# android/
+# ios/

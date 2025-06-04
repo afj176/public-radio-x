@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { Station } from '@/models/Station';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext'; // Import useTheme
@@ -42,7 +42,7 @@ const RecentlyPlayedList: React.FC<RecentlyPlayedListProps> = ({ onStationSelect
       <Text style={[styles.title, { color: colors.text }]}>Recently Played</Text>
       <FlatList
         data={recentlyPlayedStations}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.stationuuid} // Use stationuuid
         horizontal
         showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => (
@@ -53,8 +53,18 @@ const RecentlyPlayedList: React.FC<RecentlyPlayedListProps> = ({ onStationSelect
             ]}
             onPress={() => onStationSelect(item)}
           >
-            <Text style={[styles.stationName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.stationGenre, { color: colors.subtleText }]} numberOfLines={1}>{item.genre}</Text>
+            {item.favicon ? (
+              <Image source={{ uri: item.favicon }} style={styles.favicon} onError={(e) => console.log("Failed to load favicon for recent:", e.nativeEvent.error, item.favicon)} />
+            ) : (
+              <View style={styles.faviconPlaceholder} />
+            )}
+            <View style={styles.textContainer}>
+              <Text style={[styles.stationName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+              {/* Use tags or codec for genre display */}
+              <Text style={[styles.stationDetails, { color: colors.subtleText }]} numberOfLines={1}>
+                {item.tags?.split(',')[0] || item.codec || 'N/A'}
+              </Text>
+            </View>
           </TouchableOpacity>
         )}
         contentContainerStyle={styles.listContentContainer}
@@ -88,14 +98,30 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginRight: spacing.sm, // For spacing between items
     borderRadius: borderRadius.md,
+    flexDirection: 'row', // Align favicon and text
+    alignItems: 'center', // Center items vertically
     // Shadows applied inline
+  },
+  favicon: {
+    width: 20, // Smaller for horizontal list
+    height: 20,
+    marginRight: spacing.sm,
+    borderRadius: 3,
+  },
+  faviconPlaceholder: {
+    width: 20,
+    height: 20,
+    marginRight: spacing.sm,
+  },
+  textContainer: {
+    flex: 1, // Allow text to take remaining space
   },
   stationName: {
     fontSize: typography.fontSizes.sm,
     fontWeight: typography.fontWeights.medium,
     marginBottom: spacing.xs,
   },
-  stationGenre: {
+  stationDetails: { // Renamed from stationGenre for clarity
     fontSize: typography.fontSizes.xs,
   },
   emptyText: {

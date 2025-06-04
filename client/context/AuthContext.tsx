@@ -110,8 +110,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const fetchAllStationsOnce = async () => {
       setIsLoadingAllStationsCache(true);
       try {
-        const response = await fetch(Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/stations' : 'http://localhost:3000/api/stations');
-        if (!response.ok) throw new Error('Failed to fetch all stations for context cache');
+        // Fetch from the new live endpoint, assuming it provides all necessary station data
+        const response = await fetch(Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/stations/live?limit=500' : 'http://localhost:3000/api/stations/live?limit=500'); // Added limit
+        if (!response.ok) throw new Error('Failed to fetch all stations for context cache from /live');
         const data: Station[] = await response.json();
         setAllStationsCache(data);
       } catch (error) {
@@ -212,8 +213,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         throw new Error('Failed to fetch favorites');
       }
-      const data: Station[] = await response.json();
-      setFavoriteStations(data);
+      const favoriteUuids: string[] = await response.json();
+      // Resolve UUIDs to full Station objects using the cache
+      const resolvedFavorites = favoriteUuids
+        .map(uuid => allStationsCache.find(s => s.stationuuid === uuid))
+        .filter(station => station !== undefined) as Station[];
+      setFavoriteStations(resolvedFavorites);
     } catch (error: any) {
       console.error('Fetch favorites error:', error);
       if (response && response.status !== 401) { // response might be undefined if network error
@@ -243,8 +248,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({ stationId }),
       });
       if (!response.ok) throw new Error('Failed to add favorite');
-      const updatedFavorites: Station[] = await response.json();
-      setFavoriteStations(updatedFavorites);
+      const updatedFavoriteUuids: string[] = await response.json();
+      const resolvedFavorites = updatedFavoriteUuids
+        .map(uuid => allStationsCache.find(s => s.stationuuid === uuid))
+        .filter(station => station !== undefined) as Station[];
+      setFavoriteStations(resolvedFavorites);
     } catch (error) {
       console.error('Add favorite error:', error);
       Alert.alert('Error', 'Could not add station to favorites.');
@@ -262,8 +270,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Failed to remove favorite');
-      const updatedFavorites: Station[] = await response.json();
-      setFavoriteStations(updatedFavorites);
+      const updatedFavoriteUuids: string[] = await response.json();
+      const resolvedFavorites = updatedFavoriteUuids
+        .map(uuid => allStationsCache.find(s => s.stationuuid === uuid))
+        .filter(station => station !== undefined) as Station[];
+      setFavoriteStations(resolvedFavorites);
     } catch (error) {
       console.error('Remove favorite error:', error);
       Alert.alert('Error', 'Could not remove station from favorites.');
@@ -272,8 +283,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isFavorite = (stationId: string): boolean => {
-    return favoriteStations.some(fav => fav.id === stationId);
+  const isFavorite = (stationuuid: string): boolean => {
+    // Ensure favoriteStations are loaded and stationuuid is compared.
+    // The favoriteStations themselves are populated by fetchFavoriteStationsInternal,
+    // which gets Station objects. If those objects still use 'id', that's a server-side issue.
+    // Assuming server returns Station objects with stationuuid correctly.
+    return favoriteStations.some(fav => fav.stationuuid === stationuuid);
   };
 
   // --- Station List Management ---
@@ -502,8 +517,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const getAllStationsForCache = async (): Promise<Station[]> => {
     if (allStationsCache.length > 0) return allStationsCache;
     try {
-      const response = await fetch(Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/stations' : 'http://localhost:3000/api/stations');
-      if (!response.ok) throw new Error('Failed to fetch all stations for context cache on demand');
+      // Fetch from the new live endpoint
+      const response = await fetch(Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/stations/live?limit=500' : 'http://localhost:3000/api/stations/live?limit=500'); // Added limit
+      if (!response.ok) throw new Error('Failed to fetch all stations for context cache on demand from /live');
       const data: Station[] = await response.json();
       setAllStationsCache(data); // Update cache
       return data;
@@ -521,9 +537,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setIsLoadingRecents(true);
     try {
-      const recentIds = await getRecentStations();
+      const recentIds = await getRecentStations(); // These IDs should be stationuuids
       const resolvedStations = recentIds
-        .map(id => stationsLookup.find(s => s.id === id)) // Use provided lookup
+        .map(id => stationsLookup.find(s => s.stationuuid === id)) // Use stationuuid for lookup
         .filter(s => s !== undefined) as Station[];
       setRecentlyPlayedStations(resolvedStations);
     } catch (error) {
@@ -535,15 +551,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const notifyStationPlayed = async (station: Station) => {
-    if (!station || !token) return; // Need token to ensure user is logged in conceptually
-    await utilAddStationToRecents(station.id); // Update AsyncStorage
+    if (!station || !token) return;
+    // Assuming station.stationuuid is the correct unique identifier now
+    await utilAddStationToRecents(station.stationuuid); // Update AsyncStorage with stationuuid
 
     // Update in-memory state for immediate UI feedback
     setRecentlyPlayedStations(prevRecents => {
-      const otherRecents = prevRecents.filter(s => s.id !== station.id);
+      const otherRecents = prevRecents.filter(s => s.stationuuid !== station.stationuuid);
       return [station, ...otherRecents].slice(0, MAX_RECENT_STATIONS);
     });
-    // No need to call fetchRecentlyPlayedStationsInternal here as we're manually updating the state
   };
 
 // Make sure Alert is imported if not already

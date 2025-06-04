@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./server
+    ports:
+      - "3000:3000" # Host:Container
+    environment:
+      - PGHOST=postgres
+      - PGUSER=radio_pg_user # Matches postgres service
+      - PGPASSWORD=radio_pg_password # Matches postgres service
+      - PGDATABASE=radio_app_db # Matches postgres service
+      - PGPORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NODE_ENV=development
+      # DATABASE_URL can also be constructed here if db.ts prefers it:
+      # - DATABASE_URL=postgresql://radio_pg_user:radio_pg_password@postgres:5432/radio_app_db
+    volumes:
+      - ./server:/usr/src/app # Mount local server code for development
+      - server_node_modules:/usr/src/app/node_modules # Persist node_modules separately
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./client
+    ports:
+      - "8081:80" # Host:Container (Nginx in client container listens on 80)
+    environment:
+      - NODE_ENV=development
+      # Example: If client needs to know API URL explicitly at build/runtime
+      # (though often calls are relative or proxied by another Nginx if frontend and backend are on same domain)
+      # For Expo web, environment variables are typically baked in at build time or handled via runtime config.
+      # This specific variable might not be directly used by Nginx serving static files unless the app is built to read it.
+      # - REACT_APP_API_URL=http://localhost:3000/api
+    volumes:
+      - ./client:/usr/src/app # Mount local client code for development (less critical for web-build served by Nginx unless you have a dev server in container)
+      - client_node_modules:/usr/src/app/node_modules # If client Dockerfile had dev server
+    # depends_on: # Not strictly needed if client calls backend via localhost:3000 from user's browser
+      # - backend # Uncomment if there's a direct build-time or server-side rendering dependency
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=radio_pg_user
+      - POSTGRES_PASSWORD=radio_pg_password
+      - POSTGRES_DB=radio_app_db
+    ports:
+      - "5433:5432" # Expose PG on host port 5433 to avoid conflict if local PG runs on 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persist PostgreSQL data
+      # Mount the init_db.sql script to be run on first startup
+      # Note: The script 'init_db.sql' needs to be at the root of the project,
+      # or the path here needs to be adjusted accordingly.
+      # For this task, assuming init_db.sql was created at the project root.
+      # If it was created in './server' for example, it would be './server/init_db.sql'.
+      # Let's assume it's at the root for this example.
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radio_pg_user -d radio_app_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379" # Expose Redis on default port
+    volumes:
+      - redis_data:/data # Persist Redis data (optional for cache-only)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data: {}
+  redis_data: {}
+  server_node_modules: {}
+  client_node_modules: {} # This is more relevant if client Dockerfile ran a dev server that used node_modules directly from volume. For Nginx serving web-build, it's less critical.
